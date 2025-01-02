@@ -10,6 +10,7 @@ const SegmentSchema = new Schema({
 const BlogSchema = new Schema({
   _id: { type: Schema.Types.ObjectId, required: true },
   title: { type: String, required: true },
+  brief: { type: String, required: true },
   title_image: { type: String, required: true },
   segments: [SegmentSchema],
 });

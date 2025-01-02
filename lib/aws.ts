@@ -1,6 +1,4 @@
-import { S3Client, ObjectCannedACL } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
-import { Readable } from "stream";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
   endpoint: process.env.AWS_ENDPOINT,
@@ -13,37 +11,24 @@ const s3Client = new S3Client({
 
 export default s3Client;
 
-export async function uploadToS3(
-  file: Express.Multer.File,
-  prefix: string
-): Promise<string> {
-  if (!file.buffer) {
-    throw new Error(
-      "File buffer is undefined. Ensure multer is configured correctly."
-    );
-  }
+export const uploadToS3 = async (
+  file: Blob | File,
+  folderPath: string
+): Promise<string> => {
+  const buffer = await file.arrayBuffer();
 
-  const originalName = file.originalname || "file";
-  const sanitizedFilename = originalName.replace(/[^a-zA-Z0-9.\-_]/g, "");
-  const key = `${prefix}/${Date.now()}_${sanitizedFilename}`;
+  const fileName = `${folderPath}/${Date.now()}-${
+    file instanceof File ? file.name : "uploaded-file"
+  }`;
 
-  const stream = Readable.from(file.buffer);
-
-  const params = {
-    Bucket: process.env.AWS_S3_BUCKET_NAME!,
-    Key: key,
-    Body: stream,
-    ContentType: file.mimetype,
-    ACL: "public-read" as ObjectCannedACL,
+  const uploadParams = {
+    Bucket: process.env.S3_BUCKET_NAME,
+    Key: fileName,
+    Body: Buffer.from(buffer),
+    ContentType: file.type,
   };
 
-  const upload = new Upload({
-    client: s3Client,
-    params,
-  });
+  await s3Client.send(new PutObjectCommand(uploadParams));
 
-  await upload.done();
-
-  return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-}
-
+  return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileName}`;
+};

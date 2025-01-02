@@ -1,5 +1,14 @@
-import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { headers: corsHeaders });
+}
 
 export async function GET() {
   try {
@@ -12,14 +21,23 @@ export async function GET() {
 
     if (!result) {
       console.error("No data found in the collection.");
-      return NextResponse.json({ error: "No data found" }, { status: 404 });
+      return new Response(JSON.stringify({ error: "No data found" }), {
+        status: 404,
+        headers: corsHeaders,
+      });
     }
-    return NextResponse.json(result, { status: 200 });
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: corsHeaders,
+    });
   } catch (error) {
     console.error("Error fetching data:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch data", details: (error as any).message },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({
+        error: "Failed to fetch data",
+        details: (error as any).message,
+      }),
+      { status: 500, headers: corsHeaders }
     );
   }
 }

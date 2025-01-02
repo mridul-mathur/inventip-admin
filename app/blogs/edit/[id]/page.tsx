@@ -20,6 +20,7 @@ interface Segment {
 interface Blog {
   id: string;
   title: string;
+  brief: string;
   titleImageFile: File | null;
   titleImagePreview: string | null;
   segments: Segment[];
@@ -32,6 +33,7 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [blog, setBlog] = useState<Blog>({
     id: "",
     title: "",
+    brief: "",
     titleImageFile: null,
     titleImagePreview: null,
     segments: [],
@@ -48,11 +50,12 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
           setBlog({
             id,
             title: data.title || "",
+            brief: data.brief || "",
             titleImageFile: null,
             titleImagePreview: data.title_image || null,
             segments: data.segments.map((segment: any) => ({
-              heading: segment.heading || "",
-              subheading: segment.subheading || "",
+              heading: segment.head || "",
+              subheading: segment.subhead || "",
               content: segment.content || "",
               imageFile: null,
               imagePreview: segment.seg_img || null,
@@ -115,7 +118,7 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
       const formData = new FormData();
       formData.append("id", blog.id);
       formData.append("title", blog.title);
-
+      formData.append("brief", blog.brief);
       if (blog.titleImageFile) {
         formData.append("titleImage", blog.titleImageFile);
       } else if (blog.titleImagePreview) {
@@ -212,6 +215,11 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
           className="text-2xl font-bold"
           value={blog.title}
           onChange={(e) => setBlog({ ...blog, title: e.target.value })}
+        />
+        <Textarea
+          placeholder="Enter Blog Brief"
+          value={blog.brief}
+          onChange={(e) => setBlog({ ...blog, brief: e.target.value })}
         />
         <div>
           <label className="block text-sm font-medium mb-2">Title Image</label>

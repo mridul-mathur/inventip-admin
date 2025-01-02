@@ -14,39 +14,44 @@ import {
 import Link from "next/link";
 import useFetch from "@/hooks/useFetch";
 
-interface Segments {
+interface Segment {
   head: string;
-  subhead: string;
+  subhead?: string;
   content: string;
   seg_img: string;
 }
+
 interface Blog {
   _id: string;
   title: string;
+  brief: string;
   title_image: string;
-  segment: [Segments];
+  segments: Segment[];
 }
 
 const BlogCard = ({
   _id,
   title,
+  brief,
   image,
   onDelete,
 }: {
   _id: string;
   title: string;
+  brief: string;
   image: string;
   onDelete: (id: string) => void;
 }) => {
   return (
     <Card className="p-4 w-full space-y-4">
       <img
-        src={image === "" ? "https://via.placeholder.com/200" : image}
+        src={image || "https://via.placeholder.com/200"}
         alt={title}
         className="w-full h-40 object-cover rounded-md"
       />
-      <div className="flex space-x-4 items-start justify-between">
+      <div className="space-y-2">
         <h3 className="font-semibold text-xl">{title}</h3>
+        <p className="text-gray-500">{brief}</p>
         <div className="flex space-x-2">
           <Link href={`/blogs/edit/${_id}`}>
             <Button size="icon" className="font-black" variant="secondary">
@@ -82,25 +87,13 @@ const BlogCard = ({
   );
 };
 
-interface Careers {
-  title: string;
-  content: string;
-  image: string;
-}
-
-interface BlogResponse {
-  _id: string;
-  blogs: [Blog];
-  careers: [Careers];
-}
-
 const BlogsPage = () => {
-  const { data, error, loading } = useFetch<BlogResponse>("/api");
+  const { data, error, loading } = useFetch("/api");
   const [blogs, setBlogs] = useState<Blog[]>([]);
 
   useEffect(() => {
-    if (data && data.blogs) {
-      setBlogs(data.blogs);
+    if (data) {
+      setBlogs(data.blogs || []);
     }
   }, [data]);
 
@@ -117,7 +110,7 @@ const BlogsPage = () => {
       setBlogs((prevBlogs) => prevBlogs.filter((blog) => blog._id !== _id));
     } catch (error) {
       console.error("Error deleting blog:", error);
-      console.log("Failed to delete the blog. Please try again.");
+      alert("Failed to delete the blog. Please try again.");
     }
   };
 
@@ -127,7 +120,7 @@ const BlogsPage = () => {
         <h1 className="text-2xl font-bold">Manage Blogs</h1>
         <Link href="/blogs/add">
           <Button className="font-bold" size="default">
-            <Plus />
+            <Plus className="mr-2" />
             Add Blog
           </Button>
         </Link>
@@ -142,16 +135,15 @@ const BlogsPage = () => {
         <p className="text-center">No blogs available. Add one now!</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {blogs.map((blog, index: number) => (
-            <div key={index}>
-              <BlogCard
-                key={index}
-                _id={blog._id}
-                title={blog.title}
-                image={blog.title_image}
-                onDelete={handleDelete}
-              />
-            </div>
+          {blogs.map((blog) => (
+            <BlogCard
+              key={blog._id}
+              _id={blog._id}
+              title={blog.title}
+              brief={blog.brief}
+              image={blog.title_image}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}

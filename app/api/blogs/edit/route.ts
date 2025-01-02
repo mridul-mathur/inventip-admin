@@ -54,12 +54,18 @@ export async function PUT(req: any, res: any) {
   try {
     await runMiddleware(req, res, uploadMiddleware);
 
-    const { id, title, titleImageOld, segments } = req.body;
+    const { id, title, brief, titleImageOld, segments } = req.body;
     const files = req.files as Record<string, Express.Multer.File[]>;
 
     if (!id || !title) {
       return NextResponse.json(
         { error: "Missing required fields: id or title" },
+        { status: 400 }
+      );
+    }
+    if (!id || !brief) {
+      return NextResponse.json(
+        { error: "Missing required fields: id or brief" },
         { status: 400 }
       );
     }
@@ -120,6 +126,7 @@ export async function PUT(req: any, res: any) {
 
     const updateFields: any = {
       "blogs.$.title": title,
+      "blogs.$.brief": brief,
       "blogs.$.title_image": titleImage,
     };
 

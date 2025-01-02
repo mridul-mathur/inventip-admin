@@ -9,12 +9,14 @@ export interface BlogSegment {
 export interface Blog {
   _id?: string;
   title: string;
+  brief: string;
   title_image?: string;
   segments: BlogSegment[];
 }
 
 export interface BlogFormData {
   title: string;
+  brief: string;
   titleImage: File | null;
   segments: Array<BlogSegment & { image: File | null }>;
 }

@@ -23,13 +23,14 @@ import { useToast } from "@/hooks/use-toast";
 
 const segmentSchema = z.object({
   head: z.string().min(1, "Heading is required"),
-  subhead: z.string(),
+  subhead: z.string().optional(),
   content: z.string().min(1, "Content is required"),
   image: z.instanceof(File).nullable(),
 });
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  brief: z.string().min(1, "Brief is required"),
   titleImage: z.instanceof(File).nullable(),
   segments: z.array(segmentSchema),
 });
@@ -45,6 +46,7 @@ export default function AddBlogPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
+      brief: "",
       titleImage: null,
       segments: [],
     },
@@ -59,34 +61,23 @@ export default function AddBlogPage() {
     try {
       setIsSubmitting(true);
       const formData = new FormData();
-
       formData.append("title", data.title);
       if (data.titleImage) {
-        console.log("Title Image Name:", data.titleImage.name); // Debugging
-        formData.append(
-          "titleImage",
-          data.titleImage,
-          data.titleImage.name || "file"
-        );
+        formData.append("titleImage", data.titleImage, data.titleImage.name);
       }
+      formData.append("brief", data.brief);
 
-      const segmentsWithoutFiles = data.segments.map(
-        ({ image, ...rest }) => rest
-      );
-      formData.append("segments", JSON.stringify(segmentsWithoutFiles));
+      const segments = data.segments.map(({ image, ...rest }) => ({
+        ...rest,
+        image: image ? image.name : null,
+      }));
+      formData.append("segments", JSON.stringify(segments));
 
       data.segments.forEach((segment, index) => {
         if (segment.image) {
-          console.log(`Segment ${index} Image Name:`, segment.image.name); // Debugging
-          formData.append(
-            `segments[${index}][image]`,
-            segment.image,
-            segment.image.name || "file"
-          );
+          formData.append(`segments[${index}][image]`, segment.image);
         }
       });
-
-      console.log("Form Data Sent:", formData); // Debugging
 
       const response = await fetch("/api/blogs/add", {
         method: "POST",
@@ -95,22 +86,17 @@ export default function AddBlogPage() {
 
       const result = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(result.error || "Failed to create blog");
-      }
 
-      toast({
-        title: "Success",
-        description: "Blog created successfully!",
-      });
+      toast({ title: "Success", description: "Blog created successfully!" });
       router.push("/blogs");
-      router.refresh();
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
         description:
-          error instanceof Error ? error.message : "Failed to create blog",
+          error instanceof Error ? error.message : "An error occurred",
       });
     } finally {
       setIsSubmitting(false);
@@ -150,7 +136,19 @@ export default function AddBlogPage() {
                   </FormItem>
                 )}
               />
-
+              <FormField
+                control={form.control}
+                name="brief"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Brief</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter blog brief" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="titleImage"
@@ -174,7 +172,6 @@ export default function AddBlogPage() {
               />
             </CardContent>
           </Card>
-
           <div className="space-y-4">
             {fields.map((field, index) => (
               <Card key={field.id}>
@@ -203,7 +200,6 @@ export default function AddBlogPage() {
                       </FormItem>
                     )}
                   />
-
                   <FormField
                     control={form.control}
                     name={`segments.${index}.subhead`}
@@ -217,7 +213,6 @@ export default function AddBlogPage() {
                       </FormItem>
                     )}
                   />
-
                   <FormField
                     control={form.control}
                     name={`segments.${index}.content`}
@@ -235,7 +230,6 @@ export default function AddBlogPage() {
                       </FormItem>
                     )}
                   />
-
                   <FormField
                     control={form.control}
                     name={`segments.${index}.image`}
@@ -260,7 +254,6 @@ export default function AddBlogPage() {
                 </CardContent>
               </Card>
             ))}
-
             <Button
               type="button"
               variant="outline"
