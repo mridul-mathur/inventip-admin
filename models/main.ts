@@ -23,6 +23,7 @@ const CareerSchema = new Schema({
   pay: { type: String, required: true },
   job_desc: { type: String, required: true },
   skills: [{ type: String, required: true }],
+  file_url: { type: String, required: false },
 });
 
 const MainSchema = new Schema({

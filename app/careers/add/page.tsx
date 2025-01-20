@@ -13,6 +13,7 @@ interface CareerForm {
   pay: string;
   job_desc: string;
   skills: string;
+  pdfFile: File | null;
 }
 
 export default function AddCareerPage() {
@@ -23,6 +24,7 @@ export default function AddCareerPage() {
     pay: "",
     job_desc: "",
     skills: "",
+    pdfFile: null,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,18 +37,37 @@ export default function AddCareerPage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    if (e.target.files?.[0]) {
+      if (e.target.files) {
+        setForm((prev) => ({
+          ...prev,
+          pdfFile: e.target.files ? e.target.files[0] : null,
+        }));
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const skillsArray = form.skills.split(",").map((skill) => skill.trim());
+    const formData = new FormData();
+    formData.append("position", form.position);
+    formData.append("location", form.location);
+    formData.append("duration", form.duration);
+    formData.append("pay", form.pay);
+    formData.append("job_desc", form.job_desc);
+    formData.append("skills", form.skills);
+    if (form.pdfFile) {
+      formData.append("pdfFile", form.pdfFile);
+    }
 
     try {
       const res = await fetch("/api/careers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, skills: skillsArray }),
+        body: formData,
       });
 
       if (!res.ok) {
@@ -109,6 +130,7 @@ export default function AddCareerPage() {
           onChange={handleChange}
           required
         />
+        <Input type="file" accept=".pdf" onChange={handleFileChange} />
         <div className="space-y-2">
           {error && <p className="text-red-500">{error}</p>}
           <Button type="submit" disabled={loading}>

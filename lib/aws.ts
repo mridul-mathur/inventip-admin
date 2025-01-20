@@ -1,28 +1,33 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
+import { v4 as uuidv4 } from "uuid";
 
 const s3Client = new S3Client({
-  endpoint: process.env.AWS_ENDPOINT,
-  region: process.env.AWS_REGION || "ap-south-1",
+  region: process.env.AWS_REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
 });
 
-export default s3Client;
-
 export const uploadToS3 = async (
   file: Blob | File,
   folderPath: string
 ): Promise<string> => {
-  const buffer = await file.arrayBuffer();
+  if (!file || !(file instanceof Blob)) {
+    throw new Error("Invalid file provided for upload.");
+  }
 
-  const fileName = `${folderPath}/${Date.now()}-${
-    file instanceof File ? file.name : "uploaded-file"
+  const buffer = await file.arrayBuffer();
+  const fileName = `${folderPath}/${Date.now()}-${uuidv4()}-${
+    file instanceof File ? file.name : "unknown"
   }`;
 
   const uploadParams = {
-    Bucket: process.env.S3_BUCKET_NAME,
+    Bucket: process.env.AWS_S3_BUCKET_NAME!,
     Key: fileName,
     Body: Buffer.from(buffer),
     ContentType: file.type,
@@ -30,5 +35,26 @@ export const uploadToS3 = async (
 
   await s3Client.send(new PutObjectCommand(uploadParams));
 
-  return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileName}`;
+  return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+};
+
+export const deleteFromS3 = async (imageUrl: string): Promise<void> => {
+  try {
+    const key = imageUrl.replace(
+      `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
+      ""
+    );
+
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
+        Key: key,
+      })
+    );
+
+    console.log(`Deleted image from S3: ${imageUrl}`);
+  } catch (error) {
+    console.error("Error deleting image from S3:", error);
+    throw new Error(`Failed to delete image: ${imageUrl}`);
+  }
 };

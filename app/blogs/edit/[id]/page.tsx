@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { use } from "react";
 import { Button } from "../../../../components/ui/button";
 import { Input } from "../../../../components/ui/input";
 import { Card } from "../../../../components/ui/card";
@@ -43,6 +42,11 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
   useEffect(() => {
     const fetchBlog = async () => {
+      if (!id) {
+        setErrorMessage("Blog ID is missing.");
+        setLoading(false);
+        return;
+      }
       try {
         const response = await fetch(`/api/blogs/edit?id=${id}`);
         if (response.ok) {
@@ -53,7 +57,7 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
             brief: data.brief || "",
             titleImageFile: null,
             titleImagePreview: data.title_image || null,
-            segments: data.segments.map((segment: any) => ({
+            segments: (data.segments || []).map((segment: any) => ({
               heading: segment.head || "",
               subheading: segment.subhead || "",
               content: segment.content || "",
@@ -62,7 +66,8 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
             })),
           });
         } else {
-          setErrorMessage("Failed to fetch blog data.");
+          const errorData = await response.json();
+          setErrorMessage(errorData.error || "Failed to fetch blog data.");
         }
       } catch (error) {
         setErrorMessage("Error fetching blog data.");
@@ -82,6 +87,9 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
   ) => {
     const updatedSegments = [...blog.segments];
     if (field === "imageFile" && value instanceof File) {
+      if (updatedSegments[index].imagePreview) {
+        URL.revokeObjectURL(updatedSegments[index].imagePreview);
+      }
       updatedSegments[index].imageFile = value;
       updatedSegments[index].imagePreview = URL.createObjectURL(value);
     } else if (field !== "imageFile") {
@@ -107,22 +115,31 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
   };
 
   const removeSegment = (index: number) => {
-    setBlog((prev) => ({
-      ...prev,
-      segments: prev.segments.filter((_, i) => i !== index),
-    }));
+    const updatedSegments = blog.segments.filter((_, i) => i !== index);
+    setBlog({ ...blog, segments: updatedSegments });
   };
 
   const handleUpdateBlog = async () => {
+    if (!blog.title.trim() || !blog.brief.trim()) {
+      setErrorMessage("Title and Brief are required.");
+      return;
+    }
+
+    for (const segment of blog.segments) {
+      if (!segment.heading.trim() || !segment.content.trim()) {
+        setErrorMessage("Each segment must have a heading and content.");
+        return;
+      }
+    }
+
     try {
       const formData = new FormData();
       formData.append("id", blog.id);
       formData.append("title", blog.title);
       formData.append("brief", blog.brief);
+
       if (blog.titleImageFile) {
         formData.append("titleImage", blog.titleImageFile);
-      } else if (blog.titleImagePreview) {
-        formData.append("titleImageOld", blog.titleImagePreview);
       }
 
       blog.segments.forEach((segment, index) => {
@@ -134,45 +151,23 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
         }
       });
 
+      setLoading(true);
       const response = await fetch(`/api/blogs/edit`, {
         method: "PUT",
         body: formData,
       });
 
       if (response.ok) {
-        console.log("Blog updated successfully!");
         router.push("/blogs");
       } else {
-        setErrorMessage("Failed to update blog.");
+        const errorData = await response.json();
+        setErrorMessage(errorData.error || "Failed to update blog.");
       }
     } catch (error) {
       setErrorMessage("Error updating blog.");
       console.error("Error updating blog:", error);
-    }
-  };
-
-  const handleDeleteBlog = async () => {
-    if (!confirm("Are you sure you want to delete this blog?")) return;
-
-    try {
-      const response = await fetch(`/api/blogs/edit`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: blog.id,
-          titleImage: blog.titleImagePreview,
-        }),
-      });
-
-      if (response.ok) {
-        console.log("Blog deleted successfully!");
-        router.push("/blogs");
-      } else {
-        setErrorMessage("Failed to delete blog.");
-      }
-    } catch (error) {
-      setErrorMessage("Error deleting blog.");
-      console.error("Error deleting blog:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -181,7 +176,12 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
   }
 
   if (errorMessage) {
-    return <p className="text-red-500">{errorMessage}</p>;
+    return (
+      <div className="p-6">
+        <p className="text-red-500">{errorMessage}</p>
+        <Button onClick={() => router.push("/blogs")}>Go Back</Button>
+      </div>
+    );
   }
 
   return (
@@ -193,30 +193,22 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
             className="font-bold"
             size="default"
             onClick={handleUpdateBlog}
-            disabled={!blog.title}
+            disabled={loading}
           >
-            Update Blog
-          </Button>
-          <Button
-            className="font-bold"
-            size="default"
-            variant="destructive"
-            onClick={handleDeleteBlog}
-          >
-            Delete Blog
+            {loading ? "Updating..." : "Update Blog"}
           </Button>
         </div>
       </div>
-
-      {/* Title Section */}
       <Card className="p-6 mb-6 space-y-4">
         <Input
+          required
           placeholder="Enter Blog Title"
           className="text-2xl font-bold"
           value={blog.title}
           onChange={(e) => setBlog({ ...blog, title: e.target.value })}
         />
         <Textarea
+          required
           placeholder="Enter Blog Brief"
           value={blog.brief}
           onChange={(e) => setBlog({ ...blog, brief: e.target.value })}
@@ -224,6 +216,7 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
         <div>
           <label className="block text-sm font-medium mb-2">Title Image</label>
           <Input
+            required
             type="file"
             accept="image/*"
             onChange={(e) => {
@@ -247,7 +240,6 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
         </div>
       </Card>
 
-      {/* Segments Section */}
       <div className="space-y-6">
         {blog.segments.map((segment, index) => (
           <Card key={index} className="p-6 space-y-4">

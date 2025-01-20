@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, ExternalLink } from "lucide-react";
 import useFetch from "@/hooks/useFetch";
+import Link from "next/link";
 import {
   Card,
   CardHeader,
@@ -28,10 +28,11 @@ interface Career {
   pay: string;
   job_desc: string;
   skills: string[];
+  file_url?: string;
 }
 
 export default function CareersPage() {
-  const { data, error, loading } = useFetch<{ careers: Career[] }>("/api");
+  const { data, error, loading } = useFetch("/api");
   const [careers, setCareers] = useState<Career[]>([]);
 
   useEffect(() => {
@@ -87,13 +88,14 @@ export default function CareersPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {careers.map((career, index) => (
             <CareerCard
-              key={index} // Using index as the key
+              key={index}
               _id={career._id}
               position={career.position}
               location={career.location}
               duration={career.duration}
               pay={career.pay}
               skills={career.skills}
+              file_url={career.file_url}
               onDelete={handleDelete}
             />
           ))}
@@ -112,6 +114,7 @@ function CareerCard({
   duration,
   pay,
   skills,
+  file_url,
   onDelete,
 }: {
   _id: string;
@@ -120,6 +123,7 @@ function CareerCard({
   duration: string;
   pay: string;
   skills: string[];
+  file_url?: string;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -141,8 +145,18 @@ function CareerCard({
           <strong>Skills:</strong> {skills.length ? skills.join(", ") : "N/A"}
         </p>
       </CardContent>
+
       <CardFooter>
-        <div className="flex justify-end space-x-2">
+        <div className="w-full flex justify-between items-center space-x-2">
+          <Link
+            href={file_url || "#"}
+            target="_blank"
+            className="flex items-center gap-1 text-blue-500 hover:underline"
+            passHref
+          >
+            Descripton PDF
+            <ExternalLink size={16} />
+          </Link>
           <Dialog>
             <DialogTrigger asChild>
               <Button size="icon" variant="ghost">

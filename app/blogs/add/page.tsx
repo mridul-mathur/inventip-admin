@@ -60,12 +60,14 @@ export default function AddBlogPage() {
   const onSubmit = async (data: FormSchema) => {
     try {
       setIsSubmitting(true);
+
       const formData = new FormData();
       formData.append("title", data.title);
+      formData.append("brief", data.brief);
+
       if (data.titleImage) {
         formData.append("titleImage", data.titleImage, data.titleImage.name);
       }
-      formData.append("brief", data.brief);
 
       const segments = data.segments.map(({ image, ...rest }) => ({
         ...rest,
@@ -84,12 +86,13 @@ export default function AddBlogPage() {
         body: formData,
       });
 
-      const result = await response.json();
-
-      if (!response.ok)
+      if (!response.ok) {
+        const result = await response.json();
         throw new Error(result.error || "Failed to create blog");
+      }
 
       toast({ title: "Success", description: "Blog created successfully!" });
+      form.reset();
       router.push("/blogs");
     } catch (error) {
       toast({

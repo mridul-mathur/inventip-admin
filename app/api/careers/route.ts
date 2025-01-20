@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
+import { uploadToS3, deleteFromS3 } from "@/lib/aws";
 
 interface Career {
   _id: ObjectId;
@@ -10,13 +11,22 @@ interface Career {
   pay: string;
   job_desc: string;
   skills: string[];
+  file_url?: string;
 }
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const body = await req.json();
+    const formData = await req.formData();
 
-    const { position, location, duration, pay, job_desc, skills } = body;
+    const position = formData.get("position") as string;
+    const location = formData.get("location") as string;
+    const duration = formData.get("duration") as string;
+    const pay = formData.get("pay") as string;
+    const job_desc = formData.get("job_desc") as string;
+    const skills = (formData.get("skills") as string)
+      .split(",")
+      .map((skill) => skill.trim());
+    const pdfFile = formData.get("pdfFile") as Blob | null;
 
     if (
       !position ||
@@ -24,13 +34,17 @@ export async function POST(req: Request): Promise<Response> {
       !duration ||
       !pay ||
       !job_desc ||
-      !Array.isArray(skills) ||
-      skills.some((skill) => typeof skill !== "string")
+      !skills.length
     ) {
       return NextResponse.json(
-        { error: "Invalid data provided" },
+        { error: "Missing required fields" },
         { status: 400 }
       );
+    }
+
+    let file_url = "";
+    if (pdfFile) {
+      file_url = await uploadToS3(pdfFile, "careers");
     }
 
     const career: Career = {
@@ -41,6 +55,7 @@ export async function POST(req: Request): Promise<Response> {
       pay,
       job_desc,
       skills,
+      file_url,
     };
 
     const { db } = await connectToDatabase();
@@ -76,6 +91,25 @@ export async function DELETE(req: Request): Promise<Response> {
     }
 
     const { db } = await connectToDatabase();
+
+    const career = await db
+      .collection("data")
+      .findOne(
+        { "careers._id": new ObjectId(careerId) },
+        { projection: { "careers.$": 1 } }
+      );
+
+    if (!career || !career.careers || !career.careers[0]) {
+      return NextResponse.json({ error: "Career not found" }, { status: 404 });
+    }
+
+    const file_url = career.careers[0].file_url;
+    if (file_url) {
+      const fileKey = file_url.split("/careers/")[1];
+      if (fileKey) {
+        await deleteFromS3(`careers/${fileKey}`);
+      }
+    }
 
     const result = await db
       .collection("data")
