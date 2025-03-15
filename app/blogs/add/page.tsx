@@ -31,7 +31,7 @@ import { Plus, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const segmentSchema = z.object({
-  head: z.string().min(1, "Heading is required"),
+  head: z.string().optional(),
   subhead: z.string().optional(),
   content: z.string().min(1, "Content is required"),
   image: z.instanceof(File).nullable(),
