@@ -1,119 +1,92 @@
 import { NextResponse, NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { uploadToS3 } from "@/lib/aws";
-import { z } from "zod";
 import { ObjectId } from "mongodb";
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS, PUT",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-const blogSegmentSchema = z.object({
-  head: z.string().min(1, "Heading is required"),
-  subhead: z.string().optional(),
-  content: z.string().min(1, "Content is required"),
-  seg_img: z.string().optional(),
-});
-
-const blogSchema = z.object({
-  title: z.string().min(1),
-  brief: z.string().min(1),
-  titleImage: z.string(),
-  segments: z.array(blogSegmentSchema),
-});
+export async function OPTIONS() {
+  return NextResponse.json(null, { headers: corsHeaders });
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const formData = await req.formData();
-    console.log("FormData keys:", Array.from(formData.keys()));
 
     const title = formData.get("title") as string;
     const brief = formData.get("brief") as string;
+    const categoryId = formData.get("category") as string;
     const titleImageFile = formData.get("titleImage") as Blob | null;
     const segmentsJson = formData.get("segments") as string;
+    const tagsJson = formData.get("tags") as string;
 
-    if (!title || !brief || !segmentsJson) {
+    if (!title || !brief || !segmentsJson || !categoryId || !tagsJson) {
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     const parsedSegments = JSON.parse(segmentsJson);
-    const validationResult = blogSchema.safeParse({
-      title,
-      brief,
-      titleImage: "placeholder",
-      segments: parsedSegments,
-    });
+    const parsedTags = tagsJson ? JSON.parse(tagsJson) : [];
+    const { db } = await connectToDatabase();
 
-    if (!validationResult.success) {
+    // ✅ Ensure `categoryId` is a valid ObjectId
+    if (!ObjectId.isValid(categoryId)) {
       return NextResponse.json(
-        { error: "Validation failed", details: validationResult.error.message },
-        { status: 400 }
+        { error: "Invalid category ID" },
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    const { db } = await connectToDatabase();
+    const categoryObject = new ObjectId(categoryId);
+
+    // ✅ Check if category exists
+    const categoryExists = await db
+      .collection("categories")
+      .findOne({ _id: categoryObject });
+    if (!categoryExists) {
+      return NextResponse.json(
+        { error: "Category not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    // ✅ Convert tags to ObjectId array
+    const tagObjects = parsedTags
+      .filter((tagId: string) => ObjectId.isValid(tagId))
+      .map((tagId: string) => new ObjectId(tagId));
 
     let titleImageUrl = "https://via.placeholder.com/800x400";
     if (titleImageFile) {
       titleImageUrl = await uploadToS3(titleImageFile, "blogs/titles");
     }
 
-    const enrichedSegments = await Promise.all(
-      parsedSegments.map(async (segment: any, index: number) => {
-        const segmentImageFile = formData.get(
-          `segments[${index}][image]`
-        ) as Blob | null;
-
-        let segImageUrl = "";
-        if (segmentImageFile) {
-          segImageUrl = await uploadToS3(segmentImageFile, `blogs/segments`);
-        }
-
-        return {
-          ...segment,
-          seg_img: segImageUrl,
-        };
-      })
-    );
-
     const blog = {
       _id: new ObjectId(),
       title,
       brief,
+      category: categoryObject,
       title_image: titleImageUrl,
-      segments: enrichedSegments,
+      segments: parsedSegments,
+      tags: tagObjects,
       created_at: new Date(),
     };
 
-    const updateResult = await db
-      .collection("data")
-      .updateOne(
-        { _id: new ObjectId(process.env.MONGODB_OBJECT_ID) },
-        { $push: { blogs: blog } as any },
-        { upsert: true }
-      );
-
-    if (!updateResult.modifiedCount && !updateResult.upsertedCount) {
-      throw new Error("Failed to update the blogs array in the data object.");
-    }
+    const result = await db.collection("blogs").insertOne(blog);
 
     return NextResponse.json(
-      { message: "Blog added successfully", data: blog },
-      { status: 201 }
+      { message: "Blog added successfully", data: result.insertedId },
+      { status: 201, headers: corsHeaders }
     );
   } catch (error) {
-    console.error("Error creating blog:", error);
     return NextResponse.json(
-      {
-        error: "Failed to create blog",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+      { error: "Failed to create blog", details: (error as Error).message },
+      { status: 500, headers: corsHeaders }
     );
   }
 }

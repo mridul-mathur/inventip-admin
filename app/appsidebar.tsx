@@ -1,4 +1,4 @@
-import { Briefcase, FileText } from "lucide-react";
+import { Briefcase, FileText, Group, Tag } from "lucide-react";
 
 import {
   Sidebar,
@@ -24,6 +24,8 @@ const items = [
     url: "/careers",
     icon: Briefcase,
   },
+  { title: "Manage Tags", url: "/tags", icon: Tag },
+  { title: "Manage Categories", url: "/categories", icon: Group },
 ];
 
 export default function AppSidebar() {

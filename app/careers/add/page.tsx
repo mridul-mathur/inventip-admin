@@ -69,7 +69,6 @@ export default function AddCareerPage() {
         method: "POST",
         body: formData,
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to add career");

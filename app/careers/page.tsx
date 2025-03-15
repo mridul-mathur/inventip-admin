@@ -32,12 +32,12 @@ interface Career {
 }
 
 export default function CareersPage() {
-  const { data, error, loading } = useFetch("/api");
+  const { data, error, loading } = useFetch("/api/getdata/careers");
   const [careers, setCareers] = useState<Career[]>([]);
 
   useEffect(() => {
-    if (data?.careers) {
-      setCareers(data.careers);
+    if (data?.data) {
+      setCareers(data.data);
     }
   }, [data]);
 

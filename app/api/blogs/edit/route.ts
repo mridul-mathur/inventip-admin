@@ -3,6 +3,16 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { uploadToS3, deleteFromS3 } from "@/lib/aws";
 import { ObjectId } from "mongodb";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS, PUT",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return NextResponse.json(null, { headers: corsHeaders });
+}
+
 export async function PUT(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -11,69 +21,107 @@ export async function PUT(req: NextRequest) {
     if (!blogId) {
       return NextResponse.json(
         { error: "Blog ID is required" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     const { db } = await connectToDatabase();
-
     const blogEntry = await db
-      .collection("data")
-      .findOne(
-        { "blogs._id": new ObjectId(blogId) },
-        { projection: { "blogs.$": 1 } }
-      );
+      .collection("blogs")
+      .findOne({ _id: new ObjectId(blogId) });
 
-    if (!blogEntry || !blogEntry.blogs || blogEntry.blogs.length === 0) {
-      return NextResponse.json({ error: "Blog not found" }, { status: 404 });
+    if (!blogEntry) {
+      return NextResponse.json(
+        { error: "Blog not found" },
+        { status: 404, headers: corsHeaders }
+      );
     }
 
-    const existingBlog = blogEntry.blogs[0];
     const updatedFields: any = {};
     const title = formData.get("title") as string;
     const brief = formData.get("brief") as string;
 
-    if (title && title !== existingBlog.title) {
-      updatedFields["blogs.$.title"] = title;
+    if (title && title !== blogEntry.title) {
+      updatedFields.title = title;
     }
 
-    if (brief && brief !== existingBlog.brief) {
-      updatedFields["blogs.$.brief"] = brief;
+    if (brief && brief !== blogEntry.brief) {
+      updatedFields.brief = brief;
     }
 
+    // ✅ Category handling added
+    const categoryId = formData.get("category") as string;
+    if (categoryId && categoryId !== blogEntry.category.toString()) {
+      if (!ObjectId.isValid(categoryId)) {
+        return NextResponse.json(
+          { error: "Invalid category ID" },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+      const categoryObject = new ObjectId(categoryId);
+      const categoryExists = await db
+        .collection("categories")
+        .findOne({ _id: categoryObject });
+
+      if (!categoryExists) {
+        return NextResponse.json(
+          { error: "Category not found" },
+          { status: 404, headers: corsHeaders }
+        );
+      }
+
+      updatedFields.category = categoryObject;
+    }
+
+    // Process tags
+    const tagsEntries = formData.getAll("tags[]");
+    if (tagsEntries.length > 0) {
+      const tagIds = tagsEntries.map((tag) => {
+        try {
+          return new ObjectId(tag.toString());
+        } catch {
+          return tag.toString();
+        }
+      });
+      updatedFields.tags = tagIds;
+    }
+
+    // Handling title image update
     const titleImageFile = formData.get("titleImage") as Blob | null;
     if (titleImageFile) {
       const newTitleImageUrl = await uploadToS3(titleImageFile, "blogs/titles");
+
       if (
-        existingBlog.title_image &&
-        !existingBlog.title_image.includes("placeholder")
+        blogEntry.title_image &&
+        !blogEntry.title_image.includes("placeholder")
       ) {
-        await deleteFromS3(existingBlog.title_image);
+        await deleteFromS3(blogEntry.title_image);
       }
-      updatedFields["blogs.$.title_image"] = newTitleImageUrl;
+
+      updatedFields.title_image = newTitleImageUrl;
     }
 
+    // Handling segments update
     const updatedSegments = [];
     for (let i = 0; ; i++) {
       const heading = formData.get(`segments[${i}][heading]`);
-      if (!heading) break;
+      if (!heading) break; // Exit loop if no heading found
 
       const subheading = formData.get(`segments[${i}][subheading]`) as string;
       const content = formData.get(`segments[${i}][content]`) as string;
 
       const imageFile = formData.get(`segments[${i}][image]`) as Blob | null;
-      let segImgUrl = "none";
+      let segImgUrl = blogEntry.segments?.[i]?.seg_img || "none";
 
       if (imageFile) {
         segImgUrl = await uploadToS3(imageFile, "blogs/segments");
         if (
-          existingBlog.segments?.[i]?.seg_img &&
-          !existingBlog.segments[i].seg_img.includes("placeholder")
+          blogEntry.segments?.[i]?.seg_img &&
+          !blogEntry.segments[i].seg_img.includes("placeholder")
         ) {
-          await deleteFromS3(existingBlog.segments[i].seg_img);
+          await deleteFromS3(blogEntry.segments[i].seg_img);
         }
-      } else if (existingBlog.segments?.[i]?.seg_img) {
-        segImgUrl = existingBlog.segments[i].seg_img;
       }
 
       updatedSegments.push({
@@ -84,11 +132,11 @@ export async function PUT(req: NextRequest) {
       });
     }
 
-    const existingSegmentIds = existingBlog.segments.map(
+    // Deleting removed segment images
+    const existingSegmentIds = blogEntry.segments.map(
       (seg: any) => seg.seg_img
     );
     const updatedSegmentIds = updatedSegments.map((seg) => seg.seg_img);
-
     const deletedSegmentImages = existingSegmentIds.filter(
       (img: any) => img && !updatedSegmentIds.includes(img)
     );
@@ -99,15 +147,12 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    updatedFields["blogs.$.segments"] = updatedSegments;
+    updatedFields.segments = updatedSegments;
 
     if (Object.keys(updatedFields).length > 0) {
       const result = await db
-        .collection("data")
-        .updateOne(
-          { "blogs._id": new ObjectId(blogId) },
-          { $set: updatedFields }
-        );
+        .collection("blogs")
+        .updateOne({ _id: new ObjectId(blogId) }, { $set: updatedFields });
 
       if (result.modifiedCount === 0) {
         throw new Error("Failed to update the blog.");
@@ -116,7 +161,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(
       { message: "Blog updated successfully", updatedFields },
-      { status: 200 }
+      { status: 200, headers: corsHeaders }
     );
   } catch (error) {
     console.error("Error updating blog:", error);
@@ -125,7 +170,7 @@ export async function PUT(req: NextRequest) {
         error: "Failed to update blog",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -135,23 +180,29 @@ export async function GET(req: NextRequest) {
   const blogId = searchParams.get("id");
 
   if (!blogId) {
-    return NextResponse.json({ error: "Blog ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Blog ID is required" },
+      { status: 400, headers: corsHeaders }
+    );
   }
 
   try {
     const { db } = await connectToDatabase();
     const blog = await db
-      .collection("data")
-      .findOne(
-        { "blogs._id": new ObjectId(blogId) },
-        { projection: { "blogs.$": 1 } }
-      );
+      .collection("blogs")
+      .findOne({ _id: new ObjectId(blogId) });
 
-    if (!blog || !blog.blogs || blog.blogs.length === 0) {
-      return NextResponse.json({ error: "Blog not found" }, { status: 404 });
+    if (!blog) {
+      return NextResponse.json(
+        { error: "Blog not found" },
+        { status: 404, headers: corsHeaders }
+      );
     }
 
-    return NextResponse.json(blog.blogs[0], { status: 200 });
+    return NextResponse.json(blog, {
+      status: 200,
+      headers: corsHeaders,
+    });
   } catch (error) {
     console.error("Error fetching blog:", error);
     return NextResponse.json(
@@ -159,7 +210,7 @@ export async function GET(req: NextRequest) {
         error: "Failed to fetch blog",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

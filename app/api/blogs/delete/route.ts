@@ -3,39 +3,42 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 import { deleteFromS3 } from "@/lib/aws";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS, PUT",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return NextResponse.json(null, { headers: corsHeaders });
+}
+
 export async function DELETE(req: Request) {
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
-    console.log("Received Blog ID in DELETE route:", id);
 
-    if (!id) {
+    if (!id || !ObjectId.isValid(id)) {
       return NextResponse.json(
-        { error: "Blog ID is required" },
-        { status: 400 }
+        { error: "Invalid Blog ID" },
+        { status: 400, headers: corsHeaders }
       );
     }
 
     const { db } = await connectToDatabase();
-    console.log("Connected to database for deletion.");
-
     const blogEntry = await db
-      .collection("data")
-      .findOne(
-        { "blogs._id": new ObjectId(id) },
-        { projection: { "blogs.$": 1 } }
-      );
+      .collection("blogs")
+      .findOne({ _id: new ObjectId(id) });
 
-    if (!blogEntry || !blogEntry.blogs || blogEntry.blogs.length === 0) {
+    if (!blogEntry) {
       return NextResponse.json({ error: "Blog not found" }, { status: 404 });
     }
 
-    const blogToDelete = blogEntry.blogs[0];
-    console.log("Blog to delete:", blogToDelete);
-
     const imagesToDelete = [
-      blogToDelete.title_image,
-      ...blogToDelete.segments.map((segment: any) => segment.seg_img),
+      blogEntry.title_image,
+      ...(Array.isArray(blogEntry.segments)
+        ? blogEntry.segments.map((segment: any) => segment.seg_img)
+        : []),
     ];
 
     await Promise.all(
@@ -48,30 +51,24 @@ export async function DELETE(req: Request) {
     );
 
     const result = await db
-      .collection("data")
-      .updateOne(
-        { "blogs._id": new ObjectId(id) },
-        { $pull: { blogs: { _id: new ObjectId(id) } as any } }
-      );
+      .collection("blogs")
+      .deleteOne({ _id: new ObjectId(id) });
 
-    console.log("Deletion Result:", result);
-
-    if (result.modifiedCount === 0) {
+    if (result.deletedCount === 0) {
       return NextResponse.json(
         { error: "Failed to delete blog" },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
     return NextResponse.json(
       { message: "Blog deleted successfully" },
-      { status: 200 }
+      { status: 200, headers: corsHeaders }
     );
   } catch (error) {
-    console.error("Error deleting blog:", error);
     return NextResponse.json(
       { error: "Failed to delete blog", details: (error as any).message },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

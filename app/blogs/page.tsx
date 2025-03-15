@@ -23,6 +23,7 @@ interface Segment {
 
 interface Blog {
   _id: string;
+  tags: [string];
   title: string;
   brief: string;
   title_image: string;
@@ -52,6 +53,7 @@ const BlogCard = ({
       <div className="space-y-2">
         <h3 className="font-semibold text-xl">{title}</h3>
         <p className="text-gray-500">{brief}</p>
+
         <div className="flex space-x-2">
           <Link href={`/blogs/edit/${_id}`}>
             <Button size="icon" className="font-black" variant="secondary">
@@ -88,12 +90,12 @@ const BlogCard = ({
 };
 
 const BlogsPage = () => {
-  const { data, error, loading } = useFetch("/api");
+  const { data, error, loading } = useFetch("/api/getdata/blogs");
   const [blogs, setBlogs] = useState<Blog[]>([]);
 
   useEffect(() => {
     if (data) {
-      setBlogs(data.blogs || []);
+      setBlogs(data.data || []);
     }
   }, [data]);
 
@@ -106,7 +108,6 @@ const BlogsPage = () => {
       if (!response.ok) {
         throw new Error("Failed to delete blog.");
       }
-
       setBlogs((prevBlogs) => prevBlogs.filter((blog) => blog._id !== _id));
     } catch (error) {
       console.error("Error deleting blog:", error);

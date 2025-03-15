@@ -7,6 +7,15 @@ import { Input } from "../../../../components/ui/input";
 import { Card } from "../../../../components/ui/card";
 import { Textarea } from "../../../../components/ui/textarea";
 import { Plus, Trash } from "lucide-react";
+import { MultiSelect } from "@/components/ui/multi-select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Segment {
   heading: string;
@@ -20,27 +29,68 @@ interface Blog {
   id: string;
   title: string;
   brief: string;
+  category: string;
   titleImageFile: File | null;
   titleImagePreview: string | null;
   segments: Segment[];
+  tags: string[];
 }
 
 const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = use(params);
   const router = useRouter();
+  const [categories, setCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [availableTags, setAvailableTags] = useState<
+    { label: string; value: string }[]
+  >([]);
 
   const [blog, setBlog] = useState<Blog>({
     id: "",
     title: "",
     brief: "",
+    category: "",
     titleImageFile: null,
     titleImagePreview: null,
     segments: [],
+    tags: [],
   });
+
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/getdata/categories");
+        if (!response.ok) throw new Error("Failed to fetch categories");
+        const data = await response.json();
+        setCategories(
+          data.data.map((category: { _id: string; category: string }) => ({
+            value: category._id,
+            label: category.category,
+          }))
+        );
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    const fetchTags = async () => {
+      try {
+        const response = await fetch("/api/getdata/tags");
+        if (!response.ok) throw new Error("Failed to fetch tags");
+        const data = await response.json();
+        setAvailableTags(
+          data.data.map((tag: { _id: string; tag: string }) => ({
+            value: tag._id,
+            label: tag.tag,
+          }))
+        );
+      } catch (error) {
+        console.error(error);
+      }
+    };
     const fetchBlog = async () => {
       if (!id) {
         setErrorMessage("Blog ID is missing.");
@@ -53,8 +103,10 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
           const data = await response.json();
           setBlog({
             id,
+            tags: data.tags || [],
             title: data.title || "",
             brief: data.brief || "",
+            category: data.category || "",
             titleImageFile: null,
             titleImagePreview: data.title_image || null,
             segments: (data.segments || []).map((segment: any) => ({
@@ -76,8 +128,9 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
         setLoading(false);
       }
     };
-
     fetchBlog();
+    fetchTags();
+    fetchCategories();
   }, [id]);
 
   const handleSegmentChange = (
@@ -137,7 +190,10 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
       formData.append("id", blog.id);
       formData.append("title", blog.title);
       formData.append("brief", blog.brief);
-
+      formData.append("category", blog.category);
+      blog.tags.forEach((tag) => {
+        formData.append("tags[]", tag);
+      });
       if (blog.titleImageFile) {
         formData.append("titleImage", blog.titleImageFile);
       }
@@ -188,7 +244,44 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
     <div className="p-6 w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Edit Blog</h1>
-        <div className="space-x-2">
+        <div className="relative flex space-x-2">
+          <MultiSelect
+            options={availableTags}
+            value={blog.tags}
+            onChange={(selectedTags: string[]) =>
+              setBlog({ ...blog, tags: selectedTags })
+            }
+            placeholder="Select Tags"
+            className="w-full text-sm"
+          />
+          <div>
+            <Select
+              value={
+                categories.find((cat) => cat.value === blog.category)?.label
+              }
+              onValueChange={(value) => {
+                const selectedCategory = categories.find(
+                  (cat) => cat.label === value
+                );
+                if (selectedCategory) {
+                  setBlog({ ...blog, category: selectedCategory.value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {categories.map((category) => (
+                    <SelectItem key={category.value} value={category.label}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
           <Button
             className="font-bold"
             size="default"

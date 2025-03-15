@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -10,6 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { MultiSelect } from "@/components/ui/multi-select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Form,
   FormControl,
@@ -33,6 +42,8 @@ const formSchema = z.object({
   brief: z.string().min(1, "Brief is required"),
   titleImage: z.instanceof(File).nullable(),
   segments: z.array(segmentSchema),
+  category: z.string().min(1, "Category is required"),
+  tags: z.array(z.string()).min(1, "At least one tag is required"),
 });
 
 type FormSchema = z.infer<typeof formSchema>;
@@ -41,16 +52,59 @@ export default function AddBlogPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const [categories, setCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [availableTags, setAvailableTags] = useState<
+    { label: string; value: string }[]
+  >([]);
   const form = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       brief: "",
+      category: "",
       titleImage: null,
       segments: [],
+      tags: [],
     },
   });
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const response = await fetch("/api/getdata/tags");
+        if (!response.ok) throw new Error("Failed to fetch tags");
+        const data = await response.json();
+        setAvailableTags(
+          data.data.map((tag: { _id: string; tag: string }) => ({
+            value: tag._id,
+            label: tag.tag,
+          }))
+        );
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/getdata/categories");
+        if (!response.ok) throw new Error("Failed to fetch categories");
+        const data = await response.json();
+        setCategories(
+          data.data.map((category: { _id: string; category: string }) => ({
+            value: category._id,
+            label: category.category,
+          }))
+        );
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    fetchTags();
+    fetchCategories();
+  }, []);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -60,10 +114,11 @@ export default function AddBlogPage() {
   const onSubmit = async (data: FormSchema) => {
     try {
       setIsSubmitting(true);
-
       const formData = new FormData();
       formData.append("title", data.title);
       formData.append("brief", data.brief);
+      formData.append("category", data.category);
+      formData.append("tags", JSON.stringify(data.tags));
 
       if (data.titleImage) {
         formData.append("titleImage", data.titleImage, data.titleImage.name);
@@ -109,14 +164,50 @@ export default function AddBlogPage() {
   return (
     <div className="container py-10 space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Add Blog</h1>
-        <Button
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={isSubmitting}
-          className="min-w-[120px]"
-        >
-          {isSubmitting ? "Creating..." : "Create Blog"}
-        </Button>
+        <h1 className="text-nowrap text-3xl font-bold">Add Blog</h1>
+        <div className="relative flex space-x-2">
+          <MultiSelect
+            options={availableTags}
+            value={form.watch("tags") ?? []}
+            onChange={(selectedTags: string[]) =>
+              form.setValue("tags", selectedTags)
+            }
+            placeholder="Select Tags"
+            className="w-full text-sm"
+          />
+          <div>
+            <Select
+              onValueChange={(value) => {
+                const selectedCategory = categories.find(
+                  (cat) => cat.label === value
+                );
+                if (selectedCategory) {
+                  form.setValue("category", selectedCategory.value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {categories.map((category) => (
+                    <SelectItem key={category.value} value={category.label}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            onClick={form.handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+            className="min-w-[120px]"
+          >
+            {isSubmitting ? "Creating..." : "Create Blog"}
+          </Button>
+        </div>
       </div>
 
       <Form {...form}>
