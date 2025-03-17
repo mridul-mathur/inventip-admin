@@ -49,9 +49,9 @@ export async function PUT(req: NextRequest) {
       updatedFields.brief = brief;
     }
 
-    // ✅ Category handling added
+    // Category handling
     const categoryId = formData.get("category") as string;
-    if (categoryId && categoryId !== blogEntry.category.toString()) {
+    if (categoryId && categoryId !== blogEntry.category?.toString()) {
       if (!ObjectId.isValid(categoryId)) {
         return NextResponse.json(
           { error: "Invalid category ID" },
@@ -102,16 +102,16 @@ export async function PUT(req: NextRequest) {
       updatedFields.title_image = newTitleImageUrl;
     }
 
-    // Handling segments update
+    // Process segments with proper loop termination
     const updatedSegments = [];
-    for (let i = 0; ; i++) {
-      const heading = formData.get(`segments[${i}][heading]`);
-      if (!heading) break; // Exit loop if no heading found
-
+    let i = 0;
+    while (formData.has(`segments[${i}][heading]`)) {
+      const heading = formData.get(`segments[${i}][heading]`) as string;
       const subheading = formData.get(`segments[${i}][subheading]`) as string;
       const content = formData.get(`segments[${i}][content]`) as string;
-
       const imageFile = formData.get(`segments[${i}][image]`) as Blob | null;
+
+      // Default to "none" if the segment doesn't exist in the original blog
       let segImgUrl = blogEntry.segments?.[i]?.seg_img || "none";
 
       if (imageFile) {
@@ -130,12 +130,14 @@ export async function PUT(req: NextRequest) {
         content,
         seg_img: segImgUrl,
       });
+
+      i++;
     }
 
-    // Deleting removed segment images
-    const existingSegmentIds = blogEntry.segments.map(
-      (seg: any) => seg.seg_img
-    );
+    // Handle deletion of segment images that aren't in the updated segments
+    const existingSegmentIds =
+      blogEntry.segments?.map((seg: any) => seg.seg_img) || [];
+
     const updatedSegmentIds = updatedSegments.map((seg) => seg.seg_img);
     const deletedSegmentImages = existingSegmentIds.filter(
       (img: any) => img && !updatedSegmentIds.includes(img)

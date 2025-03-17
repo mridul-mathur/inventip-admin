@@ -179,7 +179,7 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
     }
 
     for (const segment of blog.segments) {
-      if (!segment.heading.trim() || !segment.content.trim()) {
+      if (!segment.content.trim()) {
         setErrorMessage("Each segment must have a heading and content.");
         return;
       }
@@ -226,11 +226,9 @@ const EditBlogPage = ({ params }: { params: Promise<{ id: string }> }) => {
       setLoading(false);
     }
   };
-
   if (loading) {
     return <p>Loading...</p>;
   }
-
   if (errorMessage) {
     return (
       <div className="p-6">
