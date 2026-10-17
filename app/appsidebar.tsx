@@ -30,7 +30,7 @@ const items = [
 
 export default function AppSidebar() {
   return (
-    <Sidebar className="w-[var(--sidebar-width)]" variant="floating">
+    <Sidebar className="w-(--sidebar-width)" variant="floating">
       <SidebarContent>
         <Link href="/" passHref>
           <SidebarHeader className="text-xl font-bold py-2">
