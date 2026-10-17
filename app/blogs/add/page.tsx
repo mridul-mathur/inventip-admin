@@ -4,7 +4,7 @@
 import { useState, type ChangeEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,7 @@ export default function AddBlogPage() {
       tags: [],
     },
   });
+  const selectedTags = useWatch({ control: form.control, name: "tags" });
 
   useEffect(() => {
     const fetchTags = async () => {
@@ -168,7 +169,7 @@ export default function AddBlogPage() {
         <div className="relative flex space-x-2">
           <MultiSelect
             options={availableTags}
-            value={form.watch("tags") ?? []}
+            value={selectedTags ?? []}
             onChange={(selectedTags: string[]) =>
               form.setValue("tags", selectedTags)
             }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash, ExternalLink } from "lucide-react";
 import useFetch from "@/hooks/useFetch";
@@ -33,13 +33,10 @@ interface Career {
 
 export default function CareersPage() {
   const { data, error, loading } = useFetch("/api/getdata/careers");
-  const [careers, setCareers] = useState<Career[]>([]);
-
-  useEffect(() => {
-    if (data?.data) {
-      setCareers(data.data);
-    }
-  }, [data]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const careers: Career[] = (data?.data || []).filter(
+    (career: Career) => !deletedIds.includes(career._id)
+  );
 
   const handleDelete = async (id: string) => {
     try {
@@ -49,9 +46,7 @@ export default function CareersPage() {
         throw new Error("Failed to delete career");
       }
 
-      setCareers((prevCareers) =>
-        prevCareers.filter((career) => career._id !== id)
-      );
+      setDeletedIds((prevIds) => [...prevIds, id]);
     } catch (error) {
       console.error("Error deleting career:", error);
     }

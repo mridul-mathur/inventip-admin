@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Plus, Trash, Pencil } from "lucide-react";
@@ -91,13 +91,10 @@ const BlogCard = ({
 
 const BlogsPage = () => {
   const { data, error, loading } = useFetch("/api/getdata/blogs");
-  const [blogs, setBlogs] = useState<Blog[]>([]);
-
-  useEffect(() => {
-    if (data) {
-      setBlogs(data.data || []);
-    }
-  }, [data]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const blogs: Blog[] = (data?.data || []).filter(
+    (blog: Blog) => !deletedIds.includes(blog._id)
+  );
 
   const handleDelete = async (_id: string) => {
     try {
@@ -108,7 +105,7 @@ const BlogsPage = () => {
       if (!response.ok) {
         throw new Error("Failed to delete blog.");
       }
-      setBlogs((prevBlogs) => prevBlogs.filter((blog) => blog._id !== _id));
+      setDeletedIds((prevIds) => [...prevIds, _id]);
     } catch (error) {
       console.error("Error deleting blog:", error);
       alert("Failed to delete the blog. Please try again.");
